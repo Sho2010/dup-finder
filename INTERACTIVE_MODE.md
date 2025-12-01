@@ -30,17 +30,19 @@
 - ファイルパス
 - ファイルサイズ（人間が読みやすい形式）
 - 更新日時
-- SHA256ハッシュ（最初の16文字）
+- xxHashハッシュ（最初の16文字、計算済みの場合のみ）
 
 ### 2. アクション選択
 
 各重複セットに対して以下のアクションを選択できます：
 
 - **[s] Skip**: 何もしない
-- **[1] Keep file 1, delete file 2**: ファイル1を残してファイル2を削除
-- **[2] Keep file 2, delete file 1**: ファイル2を残してファイル1を削除
+- **[1] Delete file 1**: ファイル1を削除（ファイル2を残す）
+- **[2] Delete file 2**: ファイル2を削除（ファイル1を残す）
+- **[h] Compute hash**: ハッシュを計算してファイルが本当に同一かを確認（ハッシュ未計算時のみ）
 - **[a] Keep all from dir1**: dir1の全てのファイルを残してdir2を削除（2ディレクトリ比較時のみ）
 - **[b] Keep all from dir2**: dir2の全てのファイルを残してdir1を削除（2ディレクトリ比較時のみ）
+- **[f] Finish**: 現在までの選択で確認画面に進む（残りの重複をスキップ）
 - **[q] Quit**: インタラクティブモードを終了
 
 ### 3. バッチ削除モード
@@ -84,9 +86,11 @@
 ## ハッシュの計算
 
 - `--compare-hash`を使用した場合：ハッシュは事前に計算済み
-- `--compare-hash`を使用しない場合：インタラクティブモード開始時にオンデマンドで計算
+- `--compare-hash`を使用しない場合：
+  - 各重複セットで `[h]` を選択してオンデマンドで計算可能
+  - ファイルサイズが同じでも内容が異なる場合を検出できる
 
-インタラクティブモードでは、ファイルの内容が本当に同一かを確認するため、常にハッシュを使用します。
+インタラクティブモードでは、ファイルの内容が本当に同一かを確認するため、ハッシュ計算を推奨します。
 
 ## 安全機能
 
@@ -116,8 +120,8 @@ document.pdf:        ✓ [Hash: ✓ Identical]
 --- Entering Interactive Deletion Mode ---
 
 === Duplicate Set #1 ===
-Found 2 files with identical content
-Hash: a1b2c3d4e5f6g7h8...
+Found 2 files with same size
+Hash: a1b2c3d4e5f6g7h8... (verified)
 
 [1] /home/user/Downloads/photo.jpg
     Size: 2.3 MB
@@ -129,11 +133,12 @@ Hash: a1b2c3d4e5f6g7h8...
 
 Choose an action:
   [s] Skip (do nothing)
-  [1] Keep file 1, delete file 2
-  [2] Keep file 2, delete file 1
+  [1] Delete: /home/user/Backup/photo.jpg
+  [2] Delete: /home/user/Downloads/photo.jpg
   [a] Keep all from /home/user/Downloads, delete all from /home/user/Backup
   [b] Keep all from /home/user/Backup, delete all from /home/user/Downloads
   [q] Quit interactive mode
+  [f] Finish selection and proceed to confirmation
 
 Your choice: 1
 

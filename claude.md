@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-dup-finder is a CLI tool for finding duplicate files across multiple directories. It performs pairwise comparison of directories, identifying files with the same name and optionally verifying content similarity using SHA256 hashing.
+dup-finder is a CLI tool for finding duplicate files across multiple directories. It performs pairwise comparison of directories, identifying files with the same name and optionally verifying content similarity using xxHash.
 
 ## Development History
 
@@ -91,7 +91,7 @@ type FileInfo struct {
     Directory string    // Root directory
     Size      int64     // File size in bytes
     ModTime   time.Time // Modification time
-    Hash      string    // SHA256 hash (computed lazily)
+    Hash      string    // xxHash (computed lazily)
 }
 ```
 

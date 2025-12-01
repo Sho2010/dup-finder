@@ -22,7 +22,7 @@ A cross-platform CLI tool for finding duplicate files across multiple directorie
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/Sho2010/dup-finder.git
 cd dup-finder
 
 # Build the executable
@@ -266,7 +266,7 @@ For complete documentation, see [INTERACTIVE_MODE.md](INTERACTIVE_MODE.md).
 | `-m` | `--min-size` | Minimum file size in bytes | `0` |
 | `-e` | `--extensions` | Comma-separated file extensions (e.g., `.jpg,.png`) | `""` (all files) |
 | `-L` | `--max-depth` | Maximum directory depth (-1 = unlimited) | `-1` |
-| `-H` | `--compare-hash` | Enable SHA256 hash comparison | `false` |
+| `-H` | `--compare-hash` | Enable xxHash content comparison | `false` |
 | `-w` | `--workers` | Number of parallel workers | `NumCPU()` |
 | `-i` | `--interactive` | Enable interactive deletion mode | `false` |
 
@@ -470,7 +470,9 @@ For detailed development documentation, see [claude.md](claude.md).
 
 ## License
 
-[Add your license information here]
+MIT License - See [LICENSE](LICENSE) file for details.
+
+Copyright (c) 2025 sho2010
 
 ## Contributing
 
@@ -483,4 +485,5 @@ Contributions are welcome! Please ensure:
 
 ## Contact
 
-[Add contact information here]
+- GitHub Issues: https://github.com/Sho2010/dup-finder/issues
+- Repository: https://github.com/Sho2010/dup-finder

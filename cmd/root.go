@@ -37,7 +37,7 @@ func init() {
 	rootCmd.Flags().Int64VarP(&minSize, "min-size", "m", 0, "Minimum file size in bytes to consider")
 	rootCmd.Flags().StringSliceVarP(&extensions, "extensions", "e", []string{}, "File extensions to consider (e.g., .zip,.avi,.mp4)")
 	rootCmd.Flags().IntVarP(&maxDepth, "max-depth", "L", -1, "Maximum directory depth for recursive search (-1 for unlimited)")
-	rootCmd.Flags().BoolVarP(&compareHash, "compare-hash", "H", false, "Compare file content using SHA256 hash")
+	rootCmd.Flags().BoolVarP(&compareHash, "compare-hash", "H", false, "Compare file content using xxHash")
 	rootCmd.Flags().IntVarP(&numWorkers, "workers", "w", runtime.NumCPU(), "Number of parallel workers")
 	rootCmd.Flags().BoolVarP(&interactiveMode, "interactive", "i", false, "Enable interactive deletion mode")
 }
