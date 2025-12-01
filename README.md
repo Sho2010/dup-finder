@@ -381,24 +381,6 @@ dup-finder /backup/daily /backup/weekly /backup/monthly
 - Determines if content is truly identical
 - Non-cryptographic but excellent collision resistance
 
-### Performance
-
-Typical performance on modern hardware (SSD) with xxHash:
-
-- 1,000 files (name-only): < 0.5 seconds
-- 1,000 files (with hash): < 2 seconds
-- 10,000 files (with hash): < 15 seconds
-
-**Performance Improvement (vs SHA256):**
-- Small files (1MB): ~10x faster
-- Large files (100MB+): ~15-20x faster
-
-Performance varies based on:
-- Disk speed (SSD vs HDD)
-- File sizes
-- Number of workers
-- CPU cores available
-
 ## Development
 
 ### Running Tests
