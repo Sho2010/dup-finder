@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"dup-finder/internal/models"
+	"github.com/Sho2010/dup-finder/internal/models"
 )
 
 func TestConvertToDuplicateSets(t *testing.T) {

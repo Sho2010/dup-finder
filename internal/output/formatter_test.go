@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"dup-finder/internal/models"
+	"github.com/Sho2010/dup-finder/internal/models"
 )
 
 func TestSimpleFormatter_FormatPairComparison_NoMatches(t *testing.T) {

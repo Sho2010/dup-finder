@@ -4,7 +4,7 @@ import (
 	"os"
 	"sync"
 
-	"dup-finder/internal/models"
+	"github.com/Sho2010/dup-finder/internal/models"
 )
 
 // ScanJob represents a file to be scanned

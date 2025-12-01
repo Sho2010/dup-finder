@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"sort"
 
-	"dup-finder/internal/models"
+	"github.com/Sho2010/dup-finder/internal/models"
 )
 
 // Finder handles duplicate file detection

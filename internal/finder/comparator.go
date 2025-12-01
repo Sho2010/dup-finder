@@ -8,7 +8,7 @@ import (
 
 	"github.com/cespare/xxhash/v2"
 
-	"dup-finder/internal/models"
+	"github.com/Sho2010/dup-finder/internal/models"
 )
 
 // CalculateFileHash computes the xxHash hash of a file

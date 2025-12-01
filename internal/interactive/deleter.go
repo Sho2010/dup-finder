@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"dup-finder/internal/models"
+	"github.com/Sho2010/dup-finder/internal/models"
 )
 
 // SafeDelete performs pre-flight checks and deletes the file

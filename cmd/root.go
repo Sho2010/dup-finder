@@ -7,11 +7,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"dup-finder/internal/finder"
-	"dup-finder/internal/interactive"
-	"dup-finder/internal/models"
-	"dup-finder/internal/output"
-	"dup-finder/internal/scanner"
+	"github.com/Sho2010/dup-finder/internal/finder"
+	"github.com/Sho2010/dup-finder/internal/interactive"
+	"github.com/Sho2010/dup-finder/internal/models"
+	"github.com/Sho2010/dup-finder/internal/output"
+	"github.com/Sho2010/dup-finder/internal/scanner"
 )
 
 var (

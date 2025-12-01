@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"dup-finder/internal/finder"
-	"dup-finder/internal/models"
+	"github.com/Sho2010/dup-finder/internal/finder"
+	"github.com/Sho2010/dup-finder/internal/models"
 )
 
 // RunInteractiveSession manages the entire interactive workflow

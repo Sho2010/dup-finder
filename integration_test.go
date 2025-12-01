@@ -9,9 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"dup-finder/internal/finder"
-	"dup-finder/internal/models"
-	"dup-finder/internal/scanner"
+	"github.com/Sho2010/dup-finder/internal/finder"
+	"github.com/Sho2010/dup-finder/internal/models"
+	"github.com/Sho2010/dup-finder/internal/scanner"
 )
 
 func TestTwoDirectoryComparison(t *testing.T) {

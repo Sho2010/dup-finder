@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"dup-finder/internal/models"
+	"github.com/Sho2010/dup-finder/internal/models"
 )
 
 // Scanner handles directory scanning with filtering

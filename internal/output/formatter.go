@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"dup-finder/internal/models"
+	"github.com/Sho2010/dup-finder/internal/models"
 )
 
 // Formatter defines the interface for formatting output

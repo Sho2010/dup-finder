@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"dup-finder/cmd"
+	"github.com/Sho2010/dup-finder/cmd"
 )
 
 func main() {
