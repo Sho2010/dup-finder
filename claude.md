@@ -376,6 +376,59 @@ video.mp4:           ✓ [Hash: ✓ Identical]
 - Table output with borders: `--format table`
 - HTML report: `--format html`
 
+## Platform Support
+
+### Cross-Platform Compatibility
+
+dup-finder is fully compatible with:
+- **Linux** (all major distributions)
+- **macOS** (10.15+)
+- **Windows** (10+, Server 2016+)
+
+### Windows Compatibility Details
+
+**Path Handling:**
+- Uses `path/filepath` package throughout for cross-platform path handling
+- Automatically handles backslash (`\`) and forward slash (`/`) separators
+- Correctly uses `filepath.Separator` for depth calculation
+- Supports long paths (260+ characters) on Windows 10 1607+
+
+**File Operations:**
+- All file I/O uses standard library (`os`, `io`, `crypto`)
+- No platform-specific system calls or shell commands
+- File permissions handled correctly across platforms
+- UTF-8 unicode support for filenames (Japanese, Chinese, emoji, etc.)
+
+**Testing:**
+The integration test suite includes Windows-specific tests:
+- `TestCrossPlatformPaths`: Verifies correct path separator handling
+- `TestWindowsStylePaths`: Tests nested paths and filenames with spaces
+- `TestUnicodeFilenames`: Validates international character support
+- `TestCaseInsensitiveExtensions`: Ensures case-insensitive extension filtering
+
+**Windows Terminal Recommendations:**
+- Use Windows Terminal or PowerShell 7+ for best UTF-8 symbol display (✓, ✗, ↔)
+- If symbols don't display correctly, the tool still functions properly
+- Set console to UTF-8: `chcp 65001`
+
+### Building on Windows
+
+```cmd
+# Command Prompt or PowerShell
+go build -o dup-finder.exe
+
+# Run
+dup-finder.exe C:\path\to\dir1 C:\path\to\dir2
+```
+
+```bash
+# Git Bash or MSYS2
+go build -o dup-finder.exe
+
+# Run with forward slashes
+./dup-finder.exe /c/path/to/dir1 /c/path/to/dir2
+```
+
 ## Dependencies
 
 ```
@@ -385,9 +438,76 @@ github.com/stretchr/testify v1.11.1  # Testing utilities
 
 ## Building and Testing
 
-### Build
+### Using Taskfile (Recommended)
+
+The project includes a [Taskfile](https://taskfile.dev) for streamlined building and testing:
+
 ```bash
+# Build for current platform
+task build
+
+# Build Windows binary
+task build:windows
+
+# Build for all platforms (Linux, macOS Intel/ARM, Windows)
+task build:all
+
+# Run all tests
+task test
+
+# Run tests with coverage report
+task test:coverage
+
+# Run tests with race detector
+task test:race
+
+# Run integration tests only
+task test:integration
+
+# Format code
+task fmt
+
+# Run static analysis
+task vet
+
+# Clean build artifacts
+task clean
+
+# Show all available tasks
+task --list
+```
+
+**Taskfile Features:**
+- Automatic version embedding from git tags/commits
+- Build optimization with `-ldflags="-s -w"` (reduces binary size)
+- Incremental builds based on source file changes
+- Cross-platform build support
+- Integrated testing and linting
+
+### Manual Build Commands
+
+#### Build
+```bash
+# Standard build
 go build
+
+# Optimized build with version info
+go build -ldflags="-s -w" -o dup-finder
+```
+
+#### Cross-Platform Builds
+```bash
+# Windows 64-bit
+GOOS=windows GOARCH=amd64 go build -o dup-finder.exe
+
+# Linux 64-bit
+GOOS=linux GOARCH=amd64 go build -o dup-finder-linux
+
+# macOS Intel
+GOOS=darwin GOARCH=amd64 go build -o dup-finder-darwin-amd64
+
+# macOS Apple Silicon
+GOOS=darwin GOARCH=arm64 go build -o dup-finder-darwin-arm64
 ```
 
 ### Run Tests

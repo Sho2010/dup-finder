@@ -256,3 +256,219 @@ func TestGeneratePairs(t *testing.T) {
 		})
 	}
 }
+
+// TestCrossPlatformPaths verifies that the tool correctly handles paths
+// on all platforms (Unix forward slashes, Windows backslashes)
+func TestCrossPlatformPaths(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create nested directory structure
+	dir1 := filepath.Join(tmpDir, "dir1")
+	subDir1 := filepath.Join(dir1, "subdir")
+	dir2 := filepath.Join(tmpDir, "dir2")
+	subDir2 := filepath.Join(dir2, "subdir")
+
+	require.NoError(t, os.MkdirAll(subDir1, 0755))
+	require.NoError(t, os.MkdirAll(subDir2, 0755))
+
+	// Create files in subdirectories
+	file1 := filepath.Join(subDir1, "test.txt")
+	file2 := filepath.Join(subDir2, "test.txt")
+	require.NoError(t, os.WriteFile(file1, []byte("content"), 0644))
+	require.NoError(t, os.WriteFile(file2, []byte("content"), 0644))
+
+	opts := models.ScanOptions{
+		Directories: []string{dir1, dir2},
+		Recursive:   true,
+		NumWorkers:  runtime.NumCPU(),
+	}
+
+	// Scan directories
+	s := scanner.NewScanner(opts)
+	allFiles, err := s.ScanAll()
+	require.NoError(t, err)
+
+	// Verify files were found
+	assert.Equal(t, 1, len(allFiles[dir1]))
+	assert.Equal(t, 1, len(allFiles[dir2]))
+
+	// Verify path separators are correct for platform
+	for _, files := range allFiles {
+		for _, file := range files {
+			// filepath.Join ensures platform-correct separators
+			assert.Contains(t, file.Path, string(filepath.Separator))
+		}
+	}
+
+	// Compare
+	f := finder.NewFinder(opts)
+	comparison := f.ComparePair(allFiles[dir1], allFiles[dir2])
+
+	// Should find the test.txt in both subdirectories
+	require.Len(t, comparison.Matches, 1)
+	assert.Equal(t, "test.txt", comparison.Matches[0].Filename)
+}
+
+// TestWindowsStylePaths verifies handling of Windows-style paths
+// This test will use the platform's native path separator
+func TestWindowsStylePaths(t *testing.T) {
+	// This test verifies that paths with backslashes (Windows)
+	// or forward slashes (Unix) are handled correctly
+	tmpDir := t.TempDir()
+
+	dir1 := filepath.Join(tmpDir, "path", "to", "dir1")
+	dir2 := filepath.Join(tmpDir, "path", "to", "dir2")
+
+	require.NoError(t, os.MkdirAll(dir1, 0755))
+	require.NoError(t, os.MkdirAll(dir2, 0755))
+
+	// Create files with spaces in names (common on Windows)
+	file1 := filepath.Join(dir1, "file with spaces.txt")
+	file2 := filepath.Join(dir2, "file with spaces.txt")
+	require.NoError(t, os.WriteFile(file1, []byte("content"), 0644))
+	require.NoError(t, os.WriteFile(file2, []byte("content"), 0644))
+
+	opts := models.ScanOptions{
+		Directories: []string{dir1, dir2},
+		Recursive:   true,
+		CompareHash: true,
+		NumWorkers:  runtime.NumCPU(),
+	}
+
+	s := scanner.NewScanner(opts)
+	allFiles, err := s.ScanAll()
+	require.NoError(t, err)
+
+	// Compare
+	f := finder.NewFinder(opts)
+	comparison := f.ComparePair(allFiles[dir1], allFiles[dir2])
+
+	// Should find file with spaces in name
+	require.Len(t, comparison.Matches, 1)
+	assert.Equal(t, "file with spaces.txt", comparison.Matches[0].Filename)
+	assert.True(t, comparison.Matches[0].HashChecked)
+	assert.True(t, comparison.Matches[0].HashMatch)
+}
+
+// TestUnicodeFilenames verifies handling of Unicode characters in filenames
+// Important for international users and cross-platform compatibility
+func TestUnicodeFilenames(t *testing.T) {
+	tmpDir := t.TempDir()
+	dir1 := filepath.Join(tmpDir, "dir1")
+	dir2 := filepath.Join(tmpDir, "dir2")
+
+	require.NoError(t, os.Mkdir(dir1, 0755))
+	require.NoError(t, os.Mkdir(dir2, 0755))
+
+	// Create files with Unicode characters (Japanese, emoji, etc.)
+	unicodeNames := []string{
+		"テスト.txt",           // Japanese
+		"文件.txt",             // Chinese
+		"файл.txt",            // Russian
+		"test 😀.txt",         // Emoji
+		"café.txt",            // Accented characters
+	}
+
+	for _, name := range unicodeNames {
+		file1 := filepath.Join(dir1, name)
+		file2 := filepath.Join(dir2, name)
+		require.NoError(t, os.WriteFile(file1, []byte("content"), 0644))
+		require.NoError(t, os.WriteFile(file2, []byte("content"), 0644))
+	}
+
+	opts := models.ScanOptions{
+		Directories: []string{dir1, dir2},
+		Recursive:   true,
+		NumWorkers:  runtime.NumCPU(),
+	}
+
+	s := scanner.NewScanner(opts)
+	allFiles, err := s.ScanAll()
+	require.NoError(t, err)
+
+	// Should find all files
+	assert.Equal(t, len(unicodeNames), len(allFiles[dir1]))
+	assert.Equal(t, len(unicodeNames), len(allFiles[dir2]))
+
+	// Compare
+	f := finder.NewFinder(opts)
+	comparison := f.ComparePair(allFiles[dir1], allFiles[dir2])
+
+	// Should find all Unicode named files
+	assert.Len(t, comparison.Matches, len(unicodeNames))
+}
+
+// TestCaseInsensitiveExtensions verifies case-insensitive extension filtering
+// Important for Windows where filesystem is case-insensitive
+func TestCaseInsensitiveExtensions(t *testing.T) {
+	tmpDir := t.TempDir()
+	dir1 := filepath.Join(tmpDir, "dir1")
+
+	require.NoError(t, os.Mkdir(dir1, 0755))
+
+	// Create files with mixed case extensions
+	require.NoError(t, os.WriteFile(filepath.Join(dir1, "file.TXT"), []byte("content"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir1, "file.txt"), []byte("content"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir1, "file.Txt"), []byte("content"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir1, "file.jpg"), []byte("content"), 0644))
+
+	opts := models.ScanOptions{
+		Directories: []string{dir1},
+		Recursive:   true,
+		Extensions:  []string{".txt"}, // Lowercase filter
+		NumWorkers:  runtime.NumCPU(),
+	}
+
+	s := scanner.NewScanner(opts)
+	allFiles, err := s.ScanAll()
+	require.NoError(t, err)
+
+	// Should find all .txt files regardless of case
+	assert.Equal(t, 3, len(allFiles[dir1]), "Should find TXT, txt, and Txt files")
+}
+
+// TestSkipNonExistentDirectories verifies that non-existent directories are skipped
+// and comparison continues with remaining valid directories
+func TestSkipNonExistentDirectories(t *testing.T) {
+	tmpDir := t.TempDir()
+	dir1 := filepath.Join(tmpDir, "dir1")
+	dir2 := filepath.Join(tmpDir, "dir2_nonexistent")
+	dir3 := filepath.Join(tmpDir, "dir3")
+
+	// Create only dir1 and dir3
+	require.NoError(t, os.Mkdir(dir1, 0755))
+	require.NoError(t, os.Mkdir(dir3, 0755))
+
+	// Create test files
+	require.NoError(t, os.WriteFile(filepath.Join(dir1, "test.txt"), []byte("content"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir3, "test.txt"), []byte("content"), 0644))
+
+	// Scan with all three directories, including non-existent dir2
+	opts := models.ScanOptions{
+		Directories: []string{dir1, dir2, dir3},
+		Recursive:   true,
+		NumWorkers:  runtime.NumCPU(),
+	}
+
+	s := scanner.NewScanner(opts)
+	allFiles, err := s.ScanAll()
+	require.NoError(t, err)
+
+	// Should have files from dir1 and dir3, but not dir2
+	assert.Equal(t, 1, len(allFiles[dir1]))
+	assert.Equal(t, 0, len(allFiles[dir2])) // Non-existent directory
+	assert.Equal(t, 1, len(allFiles[dir3]))
+
+	// Generate pairs - should only include valid directories
+	validDirs := []string{dir1, dir3}
+	pairs := finder.GeneratePairs(validDirs)
+	assert.Len(t, pairs, 1) // Only 1 pair: dir1-dir3
+
+	// Compare the valid pair
+	f := finder.NewFinder(opts)
+	comparison := f.ComparePair(allFiles[dir1], allFiles[dir3])
+
+	// Should find the matching file
+	require.Len(t, comparison.Matches, 1)
+	assert.Equal(t, "test.txt", comparison.Matches[0].Filename)
+}

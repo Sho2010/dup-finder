@@ -1,0 +1,233 @@
+version: '3'
+
+vars:
+  BINARY_NAME: dup-finder
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
+  BUILD_TIME:
+    sh: date -u '+%Y-%m-%d_%H:%M:%S'
+  LDFLAGS: -s -w -X main.Version={{.VERSION}} -X main.BuildTime={{.BUILD_TIME}}
+  WIN_INSTALL_PATH: /mnt/c/src/tools
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  build:
+    desc: Build binary for current platform
+    cmds:
+      - go build -ldflags="{{.LDFLAGS}}" -o {{.BINARY_NAME}}
+    sources:
+      - ./**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BINARY_NAME}}"
+
+  build:windows:
+    desc: Build Windows 64-bit binary
+    cmds:
+      - GOOS=windows GOARCH=amd64 go build -ldflags="{{.LDFLAGS}}" -o {{.BINARY_NAME}}.exe
+    sources:
+      - ./**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BINARY_NAME}}.exe"
+
+  build:windows-32:
+    desc: Build Windows 32-bit binary
+    cmds:
+      - GOOS=windows GOARCH=386 go build -ldflags="{{.LDFLAGS}}" -o {{.BINARY_NAME}}-32bit.exe
+    sources:
+      - ./**/*.go
+    generates:
+      - "{{.BINARY_NAME}}-32bit.exe"
+
+  build:linux:
+    desc: Build Linux 64-bit binary
+    cmds:
+      - GOOS=linux GOARCH=amd64 go build -ldflags="{{.LDFLAGS}}" -o dist/{{.BINARY_NAME}}-linux-amd64
+    sources:
+      - ./**/*.go
+    generates:
+      - dist/{{.BINARY_NAME}}-linux-amd64
+
+  build:darwin:
+    desc: Build macOS binaries (Intel and Apple Silicon)
+    cmds:
+      - GOOS=darwin GOARCH=amd64 go build -ldflags="{{.LDFLAGS}}" -o dist/{{.BINARY_NAME}}-darwin-amd64
+      - GOOS=darwin GOARCH=arm64 go build -ldflags="{{.LDFLAGS}}" -o dist/{{.BINARY_NAME}}-darwin-arm64
+    sources:
+      - ./**/*.go
+    generates:
+      - dist/{{.BINARY_NAME}}-darwin-amd64
+      - dist/{{.BINARY_NAME}}-darwin-arm64
+
+  build:all:
+    desc: Build binaries for all platforms
+    deps:
+      - build:linux
+      - build:darwin
+    cmds:
+      - GOOS=windows GOARCH=amd64 go build -ldflags="{{.LDFLAGS}}" -o dist/{{.BINARY_NAME}}-windows-amd64.exe
+      - echo "Build complete! Binaries in dist/"
+      - ls -lh dist/
+
+  test:
+    desc: Run all tests
+    cmds:
+      - go test -v ./...
+
+  test:coverage:
+    desc: Run tests with coverage report
+    cmds:
+      - go test -v -cover -coverprofile=coverage.out ./...
+      - go tool cover -html=coverage.out -o coverage.html
+      - echo Coverage report generated at coverage.html
+
+  test:race:
+    desc: Run tests with race detector
+    cmds:
+      - go test -v -race ./...
+
+  test:integration:
+    desc: Run integration tests only
+    cmds:
+      - go test -v -run Integration ./...
+
+  bench:
+    desc: Run benchmarks
+    cmds:
+      - go test -bench=. -benchmem ./...
+
+  lint:
+    desc: Run linters (requires golangci-lint)
+    cmds:
+      - golangci-lint run ./...
+
+  fmt:
+    desc: Format code
+    cmds:
+      - go fmt ./...
+      - gofmt -s -w .
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  tidy:
+    desc: Tidy go modules
+    cmds:
+      - go mod tidy
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -f {{.BINARY_NAME}}
+      - rm -f {{.BINARY_NAME}}.exe
+      - rm -f {{.BINARY_NAME}}-32bit.exe
+      - rm -rf dist/
+      - rm -f coverage.out coverage.html
+      - echo Clean complete!
+
+  run:
+    desc: Build and run with example directories
+    cmds:
+      - go run . {{.CLI_ARGS}}
+
+  install:
+    desc: Install binary to $GOPATH/bin
+    cmds:
+      - go install -ldflags="{{.LDFLAGS}}"
+
+  deps:
+    desc: Download dependencies
+    cmds:
+      - go mod download
+
+  verify:
+    desc: Verify dependencies
+    cmds:
+      - go mod verify
+
+  check:
+    desc: Run all checks (fmt, vet, test)
+    deps:
+      - fmt
+      - vet
+      - test
+
+  release:
+    desc: Build release binaries for all platforms
+    cmds:
+      - mkdir -p dist
+      - task build:all
+      - cd dist && sha256sum * > checksums.txt
+      - echo Release build complete! Check dist/ directory
+
+  install:windows:
+    desc: "Build and install Windows binary to C:\\src\\tools (customizable via WIN_PATH)"
+    vars:
+      WIN_INSTALL_PATH: '{{.WIN_PATH | default .WIN_INSTALL_PATH}}'
+    cmds:
+      - task build:windows
+      - mkdir -p {{.WIN_INSTALL_PATH}}
+      - cp -f {{.BINARY_NAME}}.exe {{.WIN_INSTALL_PATH}}/{{.BINARY_NAME}}.exe
+      - cp -f run-compare.ps1 {{.WIN_INSTALL_PATH}}/run-compare.ps1
+      - echo "✓ Installed {{.BINARY_NAME}}.exe to {{.WIN_INSTALL_PATH}}/"
+      - echo "✓ Installed run-compare.ps1 to {{.WIN_INSTALL_PATH}}/"
+      - |
+        WIN_PATH_CONVERTED=$(echo "{{.WIN_INSTALL_PATH}}" | sed 's|/mnt/\([a-z]\)|\U\1:|' | sed 's|/|\\|g')
+        echo "✓ Windows path: ${WIN_PATH_CONVERTED}\\{{.BINARY_NAME}}.exe"
+        echo "✓ Windows path: ${WIN_PATH_CONVERTED}\\run-compare.ps1"
+
+  install:windows:check:
+    desc: Check if Windows binary is installed and show version
+    vars:
+      WIN_INSTALL_PATH: '{{.WIN_PATH | default .WIN_INSTALL_PATH}}'
+    cmds:
+      - |
+        WIN_PATH_CONVERTED=$(echo "{{.WIN_INSTALL_PATH}}" | sed 's|/mnt/\([a-z]\)|\U\1:|' | sed 's|/|\\|g')
+        echo "Checking installation in: ${WIN_PATH_CONVERTED}"
+        echo ""
+        if [ -f "{{.WIN_INSTALL_PATH}}/{{.BINARY_NAME}}.exe" ]; then
+          echo "✓ Found: {{.BINARY_NAME}}.exe"
+          ls -lh {{.WIN_INSTALL_PATH}}/{{.BINARY_NAME}}.exe
+        else
+          echo "✗ Not found: {{.BINARY_NAME}}.exe"
+        fi
+        if [ -f "{{.WIN_INSTALL_PATH}}/run-compare.ps1" ]; then
+          echo "✓ Found: run-compare.ps1"
+          ls -lh {{.WIN_INSTALL_PATH}}/run-compare.ps1
+        else
+          echo "✗ Not found: run-compare.ps1"
+        fi
+        echo ""
+        if [ ! -f "{{.WIN_INSTALL_PATH}}/{{.BINARY_NAME}}.exe" ] || [ ! -f "{{.WIN_INSTALL_PATH}}/run-compare.ps1" ]; then
+          echo "Run 'task install:windows' to install"
+        fi
+
+  help:
+    desc: Show detailed help
+    cmds:
+      - echo "dup-finder - Duplicate file finder"
+      - echo ""
+      - echo "Common tasks:"
+      - echo "  task build                  - Build for current platform"
+      - echo "  task build:windows          - Build Windows 64-bit binary"
+      - echo "  task build:all              - Build for all platforms"
+      - echo "  task install:windows        - Build and install to C:\\src\\tools"
+      - echo "  task install:windows:check  - Check Windows installation"
+      - echo "  task test                   - Run tests"
+      - echo "  task test:coverage          - Run tests with coverage"
+      - echo "  task clean                  - Clean build artifacts"
+      - echo "  task run -- /dir1 /dir2     - Build and run with args"
+      - echo ""
+      - echo "Custom Windows install path:"
+      - echo "  WIN_PATH=/mnt/c/custom/path task install:windows"
+      - echo ""
+      - echo "Run 'task --list' to see all available tasks"

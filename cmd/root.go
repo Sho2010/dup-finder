@@ -45,16 +45,33 @@ func Execute() error {
 }
 
 func runDupFinder(cmd *cobra.Command, args []string) error {
-	// Validate directories exist
+	// Validate directories exist and filter out non-existent ones
+	var validDirs []string
 	for _, dir := range args {
 		if _, err := os.Stat(dir); err != nil {
-			return fmt.Errorf("directory %s: %w", dir, err)
+			fmt.Fprintf(os.Stderr, "Warning: Skipping %s: %v\n", dir, err)
+			continue
 		}
+		validDirs = append(validDirs, dir)
+	}
+
+	// Check if we have at least 2 valid directories
+	if len(validDirs) < 2 {
+		return fmt.Errorf("need at least 2 valid directories to compare, found only %d", len(validDirs))
+	}
+
+	// Show which directories will be compared
+	if len(validDirs) < len(args) {
+		fmt.Fprintf(os.Stderr, "Comparing %d out of %d directories:\n", len(validDirs), len(args))
+		for _, dir := range validDirs {
+			fmt.Fprintf(os.Stderr, "  ✓ %s\n", dir)
+		}
+		fmt.Fprintln(os.Stderr)
 	}
 
 	// Build scan options
 	opts := models.ScanOptions{
-		Directories: args,
+		Directories: validDirs,
 		Recursive:   recursive,
 		MinSize:     minSize,
 		Extensions:  extensions,
@@ -70,8 +87,8 @@ func runDupFinder(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("error scanning directories: %w", err)
 	}
 
-	// Generate directory pairs
-	pairs := finder.GeneratePairs(args)
+	// Generate directory pairs (only for valid directories)
+	pairs := finder.GeneratePairs(validDirs)
 
 	// Compare each pair
 	f := finder.NewFinder(opts)
@@ -85,7 +102,7 @@ func runDupFinder(cmd *cobra.Command, args []string) error {
 		comparisons = append(comparisons, comparison)
 	}
 
-	// Format and print output
+	// Format and print output to stdout
 	result := output.FormatAllComparisons(comparisons, compareHash)
 	fmt.Print(result)
 
