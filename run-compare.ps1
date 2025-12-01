@@ -8,6 +8,7 @@ param(
     [int]$MaxDepth = -1,
     [switch]$NonRecursive,
     [int]$Workers = 0,
+    [switch]$Interactive,
     [switch]$Help
 )
 
@@ -24,6 +25,7 @@ if ($Help) {
     Write-Host "  -MaxDepth <n>     Maximum directory depth (default: -1, unlimited)"
     Write-Host "  -NonRecursive     Disable recursive search"
     Write-Host "  -Workers <n>      Number of parallel workers (default: auto)"
+    Write-Host "  -Interactive      Enable interactive deletion mode"
     Write-Host "  -Help             Show this help message"
     Write-Host ""
     Write-Host "Examples:"
@@ -31,6 +33,7 @@ if ($Help) {
     Write-Host "  .\run-compare.ps1 -CompareHash"
     Write-Host "  .\run-compare.ps1 -Extensions '.jpg,.png' -MinSize 1048576"
     Write-Host "  .\run-compare.ps1 -CompareHash -Workers 8"
+    Write-Host "  .\run-compare.ps1 -CompareHash -Interactive"
     exit 0
 }
 
@@ -107,6 +110,11 @@ if ($Workers -gt 0) {
     $args += "--workers"
     $args += $Workers.ToString()
     Write-Host "Option: Workers = $Workers" -ForegroundColor Cyan
+}
+
+if ($Interactive) {
+    $args += "--interactive"
+    Write-Host "Option: Interactive deletion mode enabled" -ForegroundColor Cyan
 }
 
 Write-Host ""
