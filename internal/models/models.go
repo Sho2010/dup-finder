@@ -8,7 +8,7 @@ type FileInfo struct {
 	Directory string    // Root directory this file belongs to
 	Size      int64     // File size in bytes
 	ModTime   time.Time // Modification time
-	Hash      string    // SHA256 hash (computed lazily)
+	Hash      string    // xxHash hash (computed lazily)
 }
 
 // ScanOptions contains configuration for file scanning

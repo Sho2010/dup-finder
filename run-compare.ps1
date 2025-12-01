@@ -19,7 +19,7 @@ if ($Help) {
     Write-Host "Usage: .\run-compare.ps1 [options]"
     Write-Host ""
     Write-Host "Options:"
-    Write-Host "  -CompareHash      Enable SHA256 hash comparison"
+    Write-Host "  -CompareHash      Enable xxHash hash comparison"
     Write-Host "  -Extensions       Comma-separated file extensions (e.g., '.txt,.jpg')"
     Write-Host "  -MinSize <bytes>  Minimum file size in bytes (default: 0)"
     Write-Host "  -MaxDepth <n>     Maximum directory depth (default: -1, unlimited)"

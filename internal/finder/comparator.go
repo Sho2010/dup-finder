@@ -1,16 +1,17 @@
 package finder
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"io"
 	"os"
 	"sync"
 
+	"github.com/cespare/xxhash/v2"
+
 	"dup-finder/internal/models"
 )
 
-// CalculateFileHash computes the SHA256 hash of a file
+// CalculateFileHash computes the xxHash hash of a file
 func CalculateFileHash(filePath string) (string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -18,7 +19,7 @@ func CalculateFileHash(filePath string) (string, error) {
 	}
 	defer file.Close()
 
-	hash := sha256.New()
+	hash := xxhash.New()
 	if _, err := io.Copy(hash, file); err != nil {
 		return "", err
 	}

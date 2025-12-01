@@ -26,7 +26,7 @@ func TestCalculateFileHash(t *testing.T) {
 
 	// Verify hash is not empty
 	assert.NotEmpty(t, hash)
-	assert.Len(t, hash, 64) // SHA256 produces 64 hex characters
+	assert.Len(t, hash, 16) // xxHash produces 16 hex characters (64-bit)
 
 	// Verify same content produces same hash
 	hash2, err := CalculateFileHash(tmpFile)
@@ -120,7 +120,7 @@ func TestComputeHashesParallel(t *testing.T) {
 	// Verify all files have hashes
 	for _, fi := range fileInfos {
 		assert.NotEmpty(t, fi.Hash)
-		assert.Len(t, fi.Hash, 64)
+		assert.Len(t, fi.Hash, 16)
 	}
 
 	// Verify hashes are unique (since content is different)
