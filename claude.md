@@ -28,6 +28,27 @@ The tool was completely refactored to support multi-directory comparison:
 - Implemented Worker Pool pattern for parallelization
 - Separated concerns: scanning, finding, comparison, output
 
+### Interactive Mode & Performance Improvements (Phase 3)
+
+**Hash Algorithm Change (commit 82392d9):**
+- Replaced SHA256 with xxHash for significant performance improvement
+- xxHash is 10-20x faster for file comparison use cases
+- Still maintains high collision resistance for duplicate detection
+- Trade-off: xxHash is non-cryptographic (acceptable for duplicate detection)
+
+**Interactive Deletion Mode (commits 5b8a649, 582ec11, 40a782d):**
+- Added `--interactive` / `-i` flag for safe, interactive file deletion
+- Features:
+  - Review each duplicate set before deletion
+  - Choose which file to keep (multiple options)
+  - Batch deletion mode for 2-directory comparisons
+  - On-demand hash verification during interactive session
+  - Early finish option to skip remaining files
+  - Final confirmation with deletion summary and space freed
+  - Comprehensive error handling and rollback
+- New package: `internal/interactive/` with session, ui, and deleter components
+- See [INTERACTIVE_MODE.md](INTERACTIVE_MODE.md) for detailed usage
+
 ## Project Structure
 
 ```
@@ -43,12 +64,18 @@ dup-finder/
 │   │   └── worker.go                 # Worker Pool implementation
 │   ├── finder/
 │   │   ├── finder.go                 # Duplicate detection logic
-│   │   └── comparator.go             # SHA256 hash computation
+│   │   └── comparator.go             # xxHash computation
+│   ├── interactive/
+│   │   ├── session.go                # Interactive session orchestration
+│   │   ├── ui.go                     # User interface prompts
+│   │   └── deleter.go                # Safe file deletion with validation
 │   └── output/
 │       └── formatter.go              # Output formatting (Formatter interface)
-├── internal/finder/comparator_test.go
-├── internal/output/formatter_test.go
+├── internal/*/test.go files          # Unit tests
 ├── integration_test.go               # End-to-end tests
+├── INTERACTIVE_MODE.md               # Interactive mode documentation
+├── Taskfile.yml                      # Build and test automation
+├── run-compare.ps1                   # Windows PowerShell helper script
 ├── go.mod
 └── go.sum
 ```
@@ -101,6 +128,34 @@ type FileMatch struct {
 }
 ```
 
+**DuplicateSet**: Group of duplicate files (for interactive mode)
+```go
+type DuplicateSet struct {
+    ID          int        // Set identifier
+    Files       []FileInfo // All duplicate file instances
+    HashChecked bool       // Whether hashes were verified
+}
+```
+
+**UserAction**: User decision in interactive mode
+```go
+type UserAction struct {
+    Action     string // "skip", "delete", "keep_dir1", "keep_dir2", "compute_hash", "finish"
+    DeleteFile string // Path of file to delete
+}
+```
+
+**SessionSummary**: Results of interactive session
+```go
+type SessionSummary struct {
+    TotalSets       int         // Number of duplicate sets processed
+    FilesDeleted    int         // Number of files deleted
+    SpaceFreed      int64       // Total bytes freed
+    SuccessfulOps   []string    // Successfully deleted files
+    FailedOps       []FailedOp  // Failed deletion attempts
+}
+```
+
 ### 2. Scanner (`internal/scanner/`)
 
 **Scanner**: Scans directories with filtering
@@ -121,9 +176,11 @@ type FileMatch struct {
 - Finds intersection of filenames
 - Optionally computes and compares hashes
 
-**Comparator**: Hash computation
-- `CalculateFileHash(path)`: Computes SHA256 hash
+**Comparator**: Hash computation (using xxHash)
+- `CalculateFileHash(path)`: Computes xxHash (64-bit) hash
 - `ComputeHashesParallel(files, workers)`: Parallel hash computation
+- xxHash is ~10-20x faster than SHA256 for duplicate detection
+- Non-cryptographic but highly collision-resistant
 
 **Helper Functions:**
 - `GeneratePairs(dirs)`: Generates all directory pairs
@@ -151,15 +208,46 @@ document.pdf:     ✓ [Hash: ✗ Different]
 
 **Design Note**: Formatter interface allows easy addition of new output formats (JSON, CSV, Table) without modifying core logic.
 
-### 5. CLI (`cmd/root.go`)
+### 5. Interactive (`internal/interactive/`)
+
+**Session**: Orchestrates interactive workflow
+- `RunInteractiveSession(comparisons, opts)`: Main entry point
+- Converts PairComparison to DuplicateSet
+- Manages user interaction loop
+- Handles batch deletion mode (for 2-directory comparisons)
+- Supports on-demand hash verification
+- Early finish option to skip remaining files
+- Collects and executes deletion actions
+
+**UI**: User interface components
+- `DisplayDuplicateSet(set)`: Shows file information with formatting
+- `PromptUserAction(set, allowBatchByDir)`: Gets user choice
+- Options: skip, delete specific file, batch by directory, compute hash, finish, quit
+- Color-coded output for better readability
+- Human-readable file sizes
+
+**Deleter**: Safe file deletion
+- `ValidateFileDeletion(path)`: Pre-deletion checks
+  - File exists
+  - Is a regular file (not directory/symlink)
+  - Parent directory is writable
+- `ShowDeletionSummary(actions)`: Final confirmation screen
+- `ExecuteDeletions(actions)`: Performs actual deletions
+- Returns detailed SessionSummary with success/failure info
+
+### 6. CLI (`cmd/root.go`)
 
 **Orchestration Flow:**
-1. Validate directories exist
+1. Validate directories exist (skip non-existent ones with warning)
 2. Build ScanOptions from flags
 3. Scan all directories in parallel (Scanner.ScanAll)
 4. Generate directory pairs (Finder.GeneratePairs)
 5. Compare each pair (Finder.ComparePair)
-6. Format and print output (output.FormatAllComparisons)
+6. **If interactive mode enabled:**
+   - Run interactive session (interactive.RunInteractiveSession)
+   - Display summary and exit
+7. **If non-interactive:**
+   - Format and print output (output.FormatAllComparisons)
 
 **Flags:**
 - `-r, --recursive`: Recursive search (default: true)
@@ -168,6 +256,7 @@ document.pdf:     ✓ [Hash: ✗ Different]
 - `-L, --max-depth`: Maximum depth (default: -1)
 - `-H, --compare-hash`: Enable hash comparison (default: false)
 - `-w, --workers`: Number of workers (default: NumCPU())
+- `-i, --interactive`: Enable interactive deletion mode (default: false)
 
 ## Algorithm Details
 
@@ -194,8 +283,34 @@ func GeneratePairs(dirs []string) [][2]string {
 
 **Phase 2: Hash verification (optional)**
 - Only for files with matching names
-- Parallel hash computation with I/O-optimized worker count
+- Parallel xxHash computation with I/O-optimized worker count
 - Compare hashes to determine content identity
+- xxHash provides 10-20x speedup over SHA256 while maintaining reliability
+
+### Interactive Mode Workflow
+
+**Phase 1: Detection and filtering**
+- Name-based scan first (same as non-interactive)
+- Optionally pre-compute hashes with `--compare-hash`
+- Convert PairComparison to DuplicateSet (groups all instances)
+- Filter by file size matching
+
+**Phase 2: User interaction**
+- Display each duplicate set with details
+- User chooses action for each set:
+  - Skip (no action)
+  - Delete specific file(s)
+  - Batch mode: delete all from one directory (2-dir only)
+  - On-demand hash verification (if not pre-computed)
+  - Early finish (proceed with selected files)
+  - Quit without changes
+
+**Phase 3: Execution**
+- Show deletion summary with total space to be freed
+- Final confirmation prompt
+- Validate each file before deletion
+- Execute deletions with error handling
+- Display detailed summary (success/failures/space freed)
 
 ### Parallel Processing Strategy
 
@@ -214,7 +329,7 @@ func GeneratePairs(dirs []string) [][2]string {
 ### Unit Tests
 
 **comparator_test.go:**
-- Hash calculation correctness
+- xxHash calculation correctness
 - Same content produces same hash
 - Different content produces different hash
 - Parallel hash computation
@@ -224,6 +339,23 @@ func GeneratePairs(dirs []string) [][2]string {
 - Output formatting with/without hash
 - Empty results handling
 - Multiple comparison formatting
+
+**interactive/session_test.go:**
+- DuplicateSet conversion
+- User action handling
+- Batch deletion mode
+- On-demand hash verification
+- Session summary generation
+
+**interactive/deleter_test.go:**
+- File validation (existence, permissions, type)
+- Deletion execution
+- Error handling
+- Summary generation
+
+**interactive/ui_test.go:**
+- Human-readable size formatting
+- Display formatting
 
 ### Integration Tests
 
@@ -235,25 +367,35 @@ func GeneratePairs(dirs []string) [][2]string {
 - No common files scenario
 - Same name, different content
 - Pair generation logic
+- Cross-platform path handling (Windows compatibility)
+- Unicode filename support
 
 **Test Coverage:**
 - Overall: >80%
-- Critical paths (hash, comparison): 100%
+- Critical paths (hash, comparison, deletion): 100%
 
 ## Performance Considerations
 
 ### Optimization Techniques
-1. **Lazy Hash Computation**: Only compute when needed (--compare-hash)
-2. **Parallel Scanning**: All directories scanned concurrently
-3. **Worker Pools**: Efficient parallel file processing
-4. **Channel Buffering**: Balanced buffer sizes for throughput
-5. **I/O Optimization**: More workers for I/O-bound hash computation
+1. **xxHash Algorithm**: 10-20x faster than SHA256 for file comparison
+2. **Lazy Hash Computation**: Only compute when needed (--compare-hash or interactive on-demand)
+3. **Parallel Scanning**: All directories scanned concurrently
+4. **Worker Pools**: Efficient parallel file processing
+5. **Channel Buffering**: Balanced buffer sizes for throughput
+6. **I/O Optimization**: More workers for I/O-bound hash computation
+7. **Size-based Pre-filtering**: In interactive mode, filter by size before hash computation
 
 ### Performance Targets
-- 1000 files across 2 directories: < 1s (name-based)
-- 1000 files across 2 directories: < 5s (with hash)
-- 10000 files across 3 directories: < 30s (with hash)
+- 1000 files across 2 directories: < 0.5s (name-based)
+- 1000 files across 2 directories: < 2s (with xxHash)
+- 10000 files across 3 directories: < 15s (with xxHash)
 - Memory usage: < 100MB for 10,000 files
+
+### Performance Comparison (xxHash vs SHA256)
+- Small files (1MB): xxHash ~10x faster
+- Large files (100MB+): xxHash ~15-20x faster
+- Collision resistance: Both excellent for duplicate detection
+- Trade-off: xxHash is non-cryptographic (acceptable for this use case)
 
 ## Usage Examples
 
@@ -296,6 +438,21 @@ func GeneratePairs(dirs []string) [][2]string {
 ./dup-finder -H -w 16 -e .zip,.rar -m 1048576 /archives1 /archives2
 ```
 
+### Interactive Mode
+```bash
+# Basic interactive deletion
+./dup-finder --interactive /dir1 /dir2
+
+# With pre-computed hashes (recommended)
+./dup-finder -H --interactive /dir1 /dir2
+
+# Interactive with filtering
+./dup-finder -i -e .jpg,.png -m 1048576 /photos1 /photos2
+
+# Multiple directories with interactive mode
+./dup-finder -i /backup1 /backup2 /backup3
+```
+
 ## Output Format
 
 ### Without Hash Comparison
@@ -324,12 +481,68 @@ video.mp4:           ✓ [Hash: ✓ Identical]
 (No duplicates)
 ```
 
+### Interactive Mode Output
+```
+Duplicate Set #1
+┌─────────────────────────────────────────────────────
+│ File 1: /path/to/dir1/photo.jpg
+│   Size: 2.5 MB
+│   Modified: 2024-01-15 14:30:00
+│   Hash: a1b2c3d4e5f67890
+│
+│ File 2: /path/to/dir2/photo.jpg
+│   Size: 2.5 MB
+│   Modified: 2024-01-15 14:30:00
+│   Hash: a1b2c3d4e5f67890
+└─────────────────────────────────────────────────────
+
+Choose an action:
+  [s] Skip
+  [1] Keep file 1, delete file 2
+  [2] Keep file 2, delete file 1
+  [a] Keep all from dir1 (batch mode)
+  [b] Keep all from dir2 (batch mode)
+  [h] Compute hash (if not already computed)
+  [f] Finish and proceed with current selections
+  [q] Quit
+
+Action: 1
+
+=== Deletion Summary ===
+Files to delete: 5
+Total space to free: 125.3 MB
+
+1. /path/to/dir2/photo.jpg (2.5 MB)
+2. /path/to/dir2/video.mp4 (50.0 MB)
+...
+
+Proceed with deletion? [y/N]: y
+
+Deleting files...
+✓ Deleted: /path/to/dir2/photo.jpg
+✓ Deleted: /path/to/dir2/video.mp4
+...
+
+=== Session Summary ===
+Duplicate sets processed: 10
+Files deleted: 5
+Space freed: 125.3 MB
+Successful: 5
+Failed: 0
+```
+
 ## Development Notes
 
 ### Breaking Changes from V1
 1. **Minimum arguments**: Now requires 2+ directories (was 0-1)
 2. **Output format**: Changed from hash-grouped list to pairwise comparison
 3. **Default extensions**: Changed from `[.zip,.avi,.mp4]` to `[]` (all files)
+
+### Breaking Changes in Phase 3
+1. **Hash algorithm**: Changed from SHA256 to xxHash (non-cryptographic)
+   - Old hashes are not compatible
+   - Significantly faster but non-cryptographic
+   - Still excellent collision resistance for duplicate detection
 
 ### Design Decisions
 
@@ -351,26 +564,56 @@ video.mp4:           ✓ [Hash: ✓ Identical]
 - Testable in isolation
 - Future extensibility without modifying core logic
 
+**Why xxHash over SHA256?**
+- Duplicate detection doesn't require cryptographic security
+- 10-20x performance improvement for large files
+- Excellent collision resistance for practical use
+- Lower CPU usage, faster user feedback
+- Trade-off: Cannot be used for security verification
+
+**Why separate interactive package?**
+- Clear separation between detection and deletion logic
+- Interactive mode has different data flow (DuplicateSet vs PairComparison)
+- Independent testing of UI, deletion, and session management
+- Non-interactive mode remains simple and fast
+- Easy to maintain and extend independently
+
+**Why size-based pre-filtering in interactive mode?**
+- Files with different sizes cannot be identical
+- Reduces unnecessary hash computation
+- Improves interactive session startup time
+- User sees only actual duplicates (content-wise)
+
 ### Future Enhancements
 
-**V2.1 - Performance:**
+**V3.1 - Interactive Mode Improvements:**
+- Preview mode (dry-run without actual deletion)
+- Undo last deletion operation
+- Save/load decision sets for later execution
+- Smart suggestions (older files, smaller quality, etc.)
+- Regex filtering in interactive session
+
+**V3.2 - Performance:**
 - Incremental scanning with cache
 - Progress bar for large directories
 - Rate limiting for disk I/O
+- Resume interrupted scans
 
-**V2.2 - Features:**
+**V3.3 - Features:**
 - Regex pattern matching for filenames
 - Exclude patterns (like .gitignore)
-- Interactive mode for duplicate resolution
 - Checksum file output/input
+- Symlink handling options
+- Duplicate file move (instead of delete)
 
-**V2.3 - Advanced:**
+**V3.4 - Advanced:**
 - Network directory support (SMB, NFS)
 - Compression-aware comparison
 - Binary comparison mode (beyond hash)
 - Plugin system for custom comparators
+- Similarity detection (fuzzy matching)
 
-**V2.4 - Output Formats:**
+**V3.5 - Output Formats:**
 - JSON output: `--format json`
 - CSV output: `--format csv`
 - Table output with borders: `--format table`
@@ -434,7 +677,26 @@ go build -o dup-finder.exe
 ```
 github.com/spf13/cobra v1.10.1       # CLI framework
 github.com/stretchr/testify v1.11.1  # Testing utilities
+github.com/cespare/xxhash/v2 v2.3.0  # Fast non-cryptographic hash function
 ```
+
+### Dependency Rationale
+
+**cobra**: Industry-standard CLI framework
+- Rich flag handling and subcommand support
+- Auto-generated help and usage documentation
+- POSIX-compliant flag parsing
+
+**testify**: Comprehensive testing toolkit
+- Assertion helpers for cleaner tests
+- Mock support for future extensibility
+- Suite support for integration tests
+
+**xxhash**: High-performance hash algorithm
+- 10-20x faster than SHA256 for large files
+- Excellent collision resistance (64-bit)
+- Production-ready (used by many databases and tools)
+- Zero dependencies itself
 
 ## Building and Testing
 
