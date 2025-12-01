@@ -821,8 +821,4 @@ When adding new features:
 
 ## License
 
-[Add your license information here]
-
-## Contact
-
-[Add contact information here]
+MIT License - see [LICENSE](LICENSE) file for details
