@@ -33,8 +33,8 @@ func PromptUserAction(set models.DuplicateSet, allowBatchByDir bool) (models.Use
 	for {
 		fmt.Println("Choose an action:")
 		fmt.Println("  [s] Skip (do nothing)")
-		fmt.Println("  [1] Keep file 1, delete file 2")
-		fmt.Println("  [2] Keep file 2, delete file 1")
+		fmt.Printf("  [1] Delete: %s\n", set.Files[1].Path)
+		fmt.Printf("  [2] Delete: %s\n", set.Files[0].Path)
 
 		// Show hash option only if hash hasn't been computed yet
 		if !set.HashComputed {
