@@ -10,8 +10,13 @@ import (
 // DisplayDuplicateSet shows file details for user decision
 func DisplayDuplicateSet(set models.DuplicateSet) error {
 	fmt.Printf("\n=== Duplicate Set #%d ===\n", set.ID)
-	fmt.Printf("Found %d files with identical content\n", len(set.Files))
-	fmt.Printf("Hash: %s...\n\n", set.Hash[:16])
+	fmt.Printf("Found %d files with same size\n", len(set.Files))
+
+	// Only show hash if computed
+	if set.HashComputed {
+		fmt.Printf("Hash: %s... (verified)\n", set.Hash[:16])
+	}
+	fmt.Println()
 
 	for i, file := range set.Files {
 		fmt.Printf("[%d] %s\n", i+1, file.Path)
@@ -31,6 +36,11 @@ func PromptUserAction(set models.DuplicateSet, allowBatchByDir bool) (models.Use
 		fmt.Println("  [1] Keep file 1, delete file 2")
 		fmt.Println("  [2] Keep file 2, delete file 1")
 
+		// Show hash option only if hash hasn't been computed yet
+		if !set.HashComputed {
+			fmt.Println("  [h] Compute hash to verify files are identical")
+		}
+
 		if allowBatchByDir {
 			// Show directory names for batch operations
 			dir1 := set.Files[0].Directory
@@ -40,6 +50,7 @@ func PromptUserAction(set models.DuplicateSet, allowBatchByDir bool) (models.Use
 		}
 
 		fmt.Println("  [q] Quit interactive mode")
+		fmt.Println("  [f] Finish selection and proceed to confirmation")
 		fmt.Print("\nYour choice: ")
 
 		var input string
@@ -53,6 +64,14 @@ func PromptUserAction(set models.DuplicateSet, allowBatchByDir bool) (models.Use
 			return models.UserAction{Action: "skip"}, nil
 		case "q", "Q":
 			return models.UserAction{}, fmt.Errorf("user quit")
+		case "f", "F":
+			return models.UserAction{}, fmt.Errorf("user finished")
+		case "h", "H":
+			if !set.HashComputed {
+				return models.UserAction{Action: "compute_hash"}, nil
+			}
+			fmt.Println("Hash already computed. Please choose a different option.")
+			fmt.Println()
 		case "1":
 			return models.UserAction{
 				Action:     "delete",

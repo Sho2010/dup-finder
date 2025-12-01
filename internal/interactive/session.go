@@ -14,7 +14,7 @@ func RunInteractiveSession(comparisons []models.PairComparison, opts models.Scan
 	sets := convertToDuplicateSets(comparisons, opts.NumWorkers)
 
 	if len(sets) == 0 {
-		fmt.Fprintln(os.Stderr, "No duplicate files found (based on content hash)")
+		fmt.Fprintln(os.Stderr, "No duplicate files found (based on size)")
 		return &models.SessionSummary{}, nil
 	}
 
@@ -58,7 +58,44 @@ func RunInteractiveSession(comparisons []models.PairComparison, opts models.Scan
 		// Get user choice
 		action, err := PromptUserAction(set, allowBatchByDir)
 		if err != nil {
+			if err.Error() == "user finished" {
+				// User wants to proceed with selected files
+				break
+			}
 			return nil, err
+		}
+
+		// Handle hash computation request
+		if action.Action == "compute_hash" {
+			fmt.Fprintln(os.Stderr, "Computing hashes...")
+			err := computeHashForSet(&set, opts.NumWorkers)
+			if err != nil {
+				if err.Error() == "hash mismatch" {
+					fmt.Fprintln(os.Stderr, "✗ Files are different (hash mismatch). Skipping.")
+					fmt.Fprintln(os.Stderr)
+					continue
+				}
+				return nil, err
+			}
+			fmt.Fprintln(os.Stderr, "✓ Files are identical (hash verified)")
+			fmt.Fprintln(os.Stderr)
+
+			// Update the set in the slice
+			sets[i] = set
+
+			// Re-display with hash info and prompt again
+			if err := DisplayDuplicateSet(set); err != nil {
+				return nil, err
+			}
+
+			action, err = PromptUserAction(set, allowBatchByDir)
+			if err != nil {
+				if err.Error() == "user finished" {
+					// User wants to proceed with selected files
+					break
+				}
+				return nil, err
+			}
 		}
 
 		// Handle batch directory deletion
@@ -125,55 +162,53 @@ func RunInteractiveSession(comparisons []models.PairComparison, opts models.Scan
 }
 
 // convertToDuplicateSets converts PairComparison to DuplicateSet (keeps pairwise structure)
+// No hash calculation is performed - hashes are computed on-demand
 func convertToDuplicateSets(comparisons []models.PairComparison, numWorkers int) []models.DuplicateSet {
 	var sets []models.DuplicateSet
 
 	for _, comp := range comparisons {
-		// Collect files from this comparison that need hashing
-		var filesToHash []*models.FileInfo
-		for i := range comp.Matches {
-			if comp.Matches[i].File1.Hash == "" {
-				filesToHash = append(filesToHash, &comp.Matches[i].File1)
-			}
-			if comp.Matches[i].File2.Hash == "" {
-				filesToHash = append(filesToHash, &comp.Matches[i].File2)
-			}
-		}
-
-		// Calculate hashes if needed
-		if len(filesToHash) > 0 {
-			ensureHashesCalculated(filesToHash, numWorkers)
-		}
-
-		// Create DuplicateSet for each match where hashes actually match
+		// Create DuplicateSet for each match based on size (no hash required)
 		for _, match := range comp.Matches {
-			if match.File1.Hash != "" && match.File1.Hash == match.File2.Hash {
-				sets = append(sets, models.DuplicateSet{
-					Hash:  match.File1.Hash,
-					Files: []models.FileInfo{match.File1, match.File2},
-				})
-			}
+			sets = append(sets, models.DuplicateSet{
+				Hash:         "",    // Empty - not computed yet
+				HashComputed: false, // Hash will be computed on-demand
+				Files:        []models.FileInfo{match.File1, match.File2},
+			})
 		}
 	}
 
 	return sets
 }
 
-// ensureHashesCalculated computes hashes for files that don't have them
-func ensureHashesCalculated(files []*models.FileInfo, numWorkers int) {
-	var needHash []*models.FileInfo
-	for _, f := range files {
-		if f.Hash == "" {
-			needHash = append(needHash, f)
+// computeHashForSet calculates hashes for files in a specific duplicate set
+func computeHashForSet(set *models.DuplicateSet, numWorkers int) error {
+	// Collect files that need hashing
+	var filesToHash []*models.FileInfo
+	for i := range set.Files {
+		if set.Files[i].Hash == "" {
+			filesToHash = append(filesToHash, &set.Files[i])
 		}
 	}
 
-	if len(needHash) == 0 {
-		return
+	if len(filesToHash) == 0 {
+		set.HashComputed = true
+		return nil
 	}
 
-	fmt.Fprintf(os.Stderr, "Computing hashes for %d files...\n", len(needHash))
-	finder.ComputeHashesParallel(needHash, numWorkers)
-	fmt.Fprintln(os.Stderr, "Hash calculation complete.")
-	fmt.Fprintln(os.Stderr)
+	// Compute hashes using existing parallel function
+	finder.ComputeHashesParallel(filesToHash, numWorkers)
+
+	// Verify all hashes match
+	if len(set.Files) > 0 {
+		firstHash := set.Files[0].Hash
+		for i := 1; i < len(set.Files); i++ {
+			if set.Files[i].Hash != firstHash {
+				return fmt.Errorf("hash mismatch")
+			}
+		}
+		set.Hash = firstHash
+	}
+
+	set.HashComputed = true
+	return nil
 }

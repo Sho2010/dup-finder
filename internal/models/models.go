@@ -40,14 +40,15 @@ type FileMatch struct {
 
 // DuplicateSet represents files that are duplicates based on hash
 type DuplicateSet struct {
-	ID    int        // Sequential ID for display
-	Files []FileInfo // All duplicate files
-	Hash  string     // Common hash value
+	ID           int        // Sequential ID for display
+	Files        []FileInfo // All duplicate files
+	Hash         string     // Common hash value (empty until computed)
+	HashComputed bool       // Whether hash has been calculated
 }
 
 // UserAction represents the user's decision
 type UserAction struct {
-	Action          string // "skip", "delete", or "batch_delete_by_dir"
+	Action          string // "skip", "delete", "batch_delete_by_dir", or "compute_hash"
 	KeepFile        string // Path of file to keep (for delete action)
 	DeleteFile      string // Path of file to delete (for delete action)
 	KeepDirectory   string // Directory to keep (for batch_delete_by_dir)
