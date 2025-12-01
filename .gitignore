@@ -1,0 +1,49 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.html
+coverage.out
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Build artifacts
+/dup-finder
+/dup-finder-*
+/dist/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Claude Code local settings (but track .claude/commands/ etc)
+.claude/settings.local.json
+
+# Temporary files
+/tmp/
+*.tmp
+
+# Task/Make temporary files
+.task/
+
+# Debug files
+debug
+__debug_bin
+
+# Environment files
+.env
+.env.local
