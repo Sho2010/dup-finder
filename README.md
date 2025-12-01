@@ -236,6 +236,27 @@ dup-finder -w 8 /large/dir1 /large/dir2
 dup-finder -H -w 16 -e .zip,.rar -m 1048576 /archives1 /archives2
 ```
 
+## Interactive Deletion Mode
+
+dup-finder includes an interactive mode for safely deleting duplicate files:
+
+```bash
+# Enable interactive mode
+dup-finder dir1 dir2 --interactive
+
+# With hash verification (recommended)
+dup-finder dir1 dir2 --compare-hash --interactive
+```
+
+**Features:**
+- Review each duplicate before deletion
+- Choose which file to keep
+- Batch deletion mode (for 2-directory comparison)
+- Final confirmation before actual deletion
+- Detailed summary with freed space
+
+For complete documentation, see [INTERACTIVE_MODE.md](INTERACTIVE_MODE.md).
+
 ## Command-Line Options
 
 | Flag | Long Form | Description | Default |
@@ -246,6 +267,7 @@ dup-finder -H -w 16 -e .zip,.rar -m 1048576 /archives1 /archives2
 | `-L` | `--max-depth` | Maximum directory depth (-1 = unlimited) | `-1` |
 | `-H` | `--compare-hash` | Enable SHA256 hash comparison | `false` |
 | `-w` | `--workers` | Number of parallel workers | `NumCPU()` |
+| `-i` | `--interactive` | Enable interactive deletion mode | `false` |
 
 ## Output Format
 
@@ -405,6 +427,10 @@ dup-finder/
 │   ├── finder/
 │   │   ├── finder.go                 # Duplicate detection
 │   │   └── comparator.go             # Hash computation
+│   ├── interactive/
+│   │   ├── session.go                # Interactive mode orchestration
+│   │   ├── ui.go                     # User interface
+│   │   └── deleter.go                # Safe file deletion
 │   └── output/
 │       └── formatter.go              # Output formatting
 └── integration_test.go               # End-to-end tests

@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"dup-finder/internal/finder"
+	"dup-finder/internal/interactive"
 	"dup-finder/internal/models"
 	"dup-finder/internal/output"
 	"dup-finder/internal/scanner"
@@ -22,12 +23,13 @@ var (
 		RunE:  runDupFinder,
 	}
 
-	recursive   bool
-	minSize     int64
-	extensions  []string
-	maxDepth    int
-	compareHash bool
-	numWorkers  int
+	recursive        bool
+	minSize          int64
+	extensions       []string
+	maxDepth         int
+	compareHash      bool
+	numWorkers       int
+	interactiveMode  bool
 )
 
 func init() {
@@ -37,6 +39,7 @@ func init() {
 	rootCmd.Flags().IntVarP(&maxDepth, "max-depth", "L", -1, "Maximum directory depth for recursive search (-1 for unlimited)")
 	rootCmd.Flags().BoolVarP(&compareHash, "compare-hash", "H", false, "Compare file content using SHA256 hash")
 	rootCmd.Flags().IntVarP(&numWorkers, "workers", "w", runtime.NumCPU(), "Number of parallel workers")
+	rootCmd.Flags().BoolVarP(&interactiveMode, "interactive", "i", false, "Enable interactive deletion mode")
 }
 
 // Execute runs the root command
@@ -105,6 +108,16 @@ func runDupFinder(cmd *cobra.Command, args []string) error {
 	// Format and print output to stdout
 	result := output.FormatAllComparisons(comparisons, compareHash)
 	fmt.Print(result)
+
+	// Enter interactive mode if requested
+	if interactiveMode {
+		fmt.Fprintln(os.Stderr, "\n--- Entering Interactive Deletion Mode ---")
+		summary, err := interactive.RunInteractiveSession(comparisons, opts)
+		if err != nil {
+			return fmt.Errorf("interactive session error: %w", err)
+		}
+		interactive.DisplaySummary(*summary)
+	}
 
 	return nil
 }
